@@ -42,9 +42,6 @@
 
 #include "miner.h"
 #include "algos.h"
-#include "sia/sia-rpc.h"
-#include "crypto/xmr-rpc.h"
-#include "equi/equihash.h"
 
 #include <cuda_runtime.h>
 
@@ -170,7 +167,7 @@ volatile bool pool_is_switching = false;
 volatile int pool_switch_count = 0;
 bool conditional_pool_rotate = false;
 
-extern char* opt_scratchpad_url;
+char* opt_scratchpad_url = NULL;
 
 // current connection
 char *rpc_user = NULL;
@@ -681,7 +678,7 @@ static void calc_network_diff(struct work *work)
 	if (opt_algo == ALGO_DECRED) nbits = work->data[29];
 	if (opt_algo == ALGO_SIA) nbits = work->data[11]; // unsure if correct
 	if (opt_algo == ALGO_EQUIHASH) {
-		net_diff = equi_network_diff(work);
+		net_diff = 0.0;
 		return;
 	}
 
@@ -724,7 +721,7 @@ static bool work_decode(const json_t *val, struct work *work)
 	case ALGO_CRYPTOLIGHT:
 	case ALGO_CRYPTONIGHT:
 	case ALGO_WILDKECCAK:
-		return rpc2_job_decode(val, work);
+		return false;
 	default:
 		data_size = 128;
 		adata_sz = data_size / 4;
@@ -909,7 +906,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 		struct work submit_work;
 		memcpy(&submit_work, work, sizeof(struct work));
 		if (!hashlog_already_submittted(submit_work.job_id, submit_work.nonces[idnonce])) {
-			if (rpc2_stratum_submit(pool, &submit_work))
+			if (false)
 				hashlog_remember_submit(&submit_work, submit_work.nonces[idnonce]);
 			stratum.job.shares_count++;
 		}
@@ -920,7 +917,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 		struct work submit_work;
 		memcpy(&submit_work, work, sizeof(struct work));
 		//if (!hashlog_already_submittted(submit_work.job_id, submit_work.nonces[idnonce])) {
-			if (equi_stratum_submit(pool, &submit_work))
+			if (false)
 				hashlog_remember_submit(&submit_work, submit_work.nonces[idnonce]);
 			stratum.job.shares_count++;
 		//}
@@ -1095,7 +1092,7 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 			data_size = 144; adata_sz = 36;
 		}
 		else if (opt_algo == ALGO_SIA) {
-			return sia_submit(curl, pool, work);
+			return false;
 		}
 
 		if (opt_algo != ALGO_HEAVY && opt_algo != ALGO_MJOLLNIR) {
@@ -1273,9 +1270,9 @@ static bool get_upstream_work(CURL *curl, struct work *work)
 	gettimeofday(&tv_start, NULL);
 
 	if (opt_algo == ALGO_SIA) {
-		char *sia_header = sia_getheader(curl, pool);
+		char *sia_header = (char*)NULL;
 		if (sia_header) {
-			rc = sia_work_decode(sia_header, work);
+			rc = 0;
 			free(sia_header);
 		}
 		gettimeofday(&tv_end, NULL);
@@ -1560,7 +1557,7 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 	int i;
 
 	if (sctx->rpc2)
-		return rpc2_stratum_gen_work(sctx, work);
+		return false;
 
 	if (!sctx->job.job_id) {
 		// applog(LOG_WARNING, "stratum_gen_work: job not yet retrieved");
@@ -1758,7 +1755,7 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 			work_set_target(work, sctx->job.diff / (128.0 * opt_difficulty));
 			break;
 		case ALGO_EQUIHASH:
-			equi_work_set_target(work, sctx->job.diff / opt_difficulty);
+			work_set_target(work, sctx->job.diff / opt_difficulty);
 			break;
 		default:
 			work_set_target(work, sctx->job.diff / opt_difficulty);
@@ -2119,7 +2116,7 @@ static void *miner_thread(void *userdata)
 			gpulog(LOG_DEBUG, thr_id, "no data");
 			continue;
 		}
-		if (opt_algo == ALGO_WILDKECCAK && !scratchpad_size) {
+		if (false) {
 			sleep(1);
 			if (!thr_id) pools[cur_pooln].wait_time += 1;
 			continue;
@@ -2618,10 +2615,10 @@ longpoll_retry:
 			goto need_reinit;
 
 		if (opt_algo == ALGO_SIA) {
-			char *sia_header = sia_getheader(curl, pool);
+			char *sia_header = (char*)NULL;
 			if (sia_header) {
 				pthread_mutex_lock(&g_work_lock);
-				if (sia_work_decode(sia_header, &g_work)) {
+				if (0) {
 					g_work_time = time(NULL);
 				}
 				free(sia_header);
@@ -2821,7 +2818,7 @@ wait_stratum_url:
 		}
 
 		if (stratum.rpc2) {
-			rpc2_stratum_thread_stuff(pool);
+			(void)0;
 		}
 
 		if (switchn != pool_switch_count) goto pool_switched;
@@ -3858,14 +3855,14 @@ int main(int argc, char *argv[])
 	}
 
 	if (opt_algo == ALGO_CRYPTONIGHT || opt_algo == ALGO_CRYPTOLIGHT) {
-		rpc2_init();
+		(void)0;
 		if (!opt_quiet) applog(LOG_INFO, "Using JSON-RPC 2.0");
 	}
 
 	if (opt_algo == ALGO_WILDKECCAK) {
-		rpc2_init();
+		(void)0;
 		if (!opt_quiet) applog(LOG_INFO, "Using JSON-RPC 2.0");
-		GetScratchpad();
+		(void)0;
 	}
 
 	flags = !opt_benchmark && strncmp(rpc_url, "https:", 6)

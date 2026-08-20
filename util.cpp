@@ -36,7 +36,6 @@
 #include "miner.h"
 #include "elist.h"
 
-#include "crypto/xmr-rpc.h"
 
 extern pthread_mutex_t stratum_sock_lock;
 extern pthread_mutex_t stratum_work_lock;
@@ -1321,7 +1320,7 @@ bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *p
 	bool ret = false;
 
 	if (sctx->rpc2)
-		return rpc2_stratum_authorize(sctx, user, pass);
+		return false;
 
 	s = (char*)malloc(80 + strlen(user) + strlen(pass));
 	sprintf(s, "{\"id\": 2, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
@@ -1456,7 +1455,7 @@ static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 	bool has_roots = !strcmp(algo, "phi2") && json_array_size(params) == 10;
 
 	if (sctx->is_equihash) {
-		return equi_stratum_notify(sctx, params);
+		return false;
 	}
 
 	job_id = json_string_value(json_array_get(params, p++));
@@ -1795,7 +1794,7 @@ static bool stratum_show_message(struct stratum_ctx *sctx, json_t *id, json_t *p
 	bool ret;
 
 	if (sctx->is_equihash)
-		return equi_stratum_show_message(sctx, id, params);
+		return true;
 
 	val = json_array_get(params, 0);
 	if (val)
@@ -1872,7 +1871,7 @@ bool stratum_handle_method(struct stratum_ctx *sctx, const char *s)
 	}
 	if (!strcasecmp(method, "mining.set_target")) {
 		sctx->is_equihash = true;
-		ret = equi_stratum_set_target(sctx, params);
+		ret = false;
 		goto out;
 	}
 	if (!strcasecmp(method, "mining.set_extranonce")) {
@@ -1903,7 +1902,7 @@ bool stratum_handle_method(struct stratum_ctx *sctx, const char *s)
 		goto out;
 	}
 	if (sctx->rpc2 && !strcasecmp(method, "job")) { // xmr/bbr
-		ret = rpc2_stratum_job(sctx, id, params);
+		ret = false;
 		goto out;
 	}
 
@@ -2159,221 +2158,18 @@ void do_gpu_tests(void)
 
 void print_hash_tests(void)
 {
-	uchar *scratchbuf = NULL;
-	char s[128] = {'\0'};
+	char s[128] = {' '};
 	uchar hash[128];
 	uchar buf[192];
 
-	// work space for scratchpad based algos
-	scratchbuf = (uchar*)calloc(128, 1024);
 	memset(buf, 0, sizeof buf);
 
-	// buf[0] = 1; buf[64] = 2; // for endian tests
-
-	printf(CL_WHT "CPU HASH ON EMPTY BUFFER RESULTS:" CL_N "\n");
-
-	allium_hash(&hash[0], &buf[0]);
-	printpfx("allium", hash);
-
-	bastionhash(&hash[0], &buf[0]);
-	printpfx("bastion", hash);
-
-	blake256hash(&hash[0], &buf[0], 8);
-	printpfx("blakecoin", hash);
-
-	blake256hash(&hash[0], &buf[0], 14);
-	printpfx("blake", hash);
-
-	blake2b_hash(&hash[0], &buf[0]);
-	printpfx("blake2b", hash);
-
-	blake2s_hash(&hash[0], &buf[0]);
-	printpfx("blake2s", hash);
-
-	bmw_hash(&hash[0], &buf[0]);
-	printpfx("bmw", hash);
-
-	c11hash(&hash[0], &buf[0]);
-	printpfx("c11", hash);
-
-	cryptolight_hash(&hash[0], &buf[0]);
-	printpfx("cryptolight", hash);
-
-	cryptonight_hash(&hash[0], &buf[0]);
-	printpfx("cryptonight", hash);
-
-	memset(buf, 0, 180);
-	decred_hash(&hash[0], &buf[0]);
-	printpfx("decred", hash);
-
-	deephash(&hash[0], &buf[0]);
-	printpfx("deep", hash);
-
-	fresh_hash(&hash[0], &buf[0]);
-	printpfx("fresh", hash);
-
-	fugue256_hash(&hash[0], &buf[0], 32);
-	printpfx("fugue256", hash);
-
-	groestlhash(&hash[0], &buf[0]);
-	printpfx("groestl", hash);
-
-	heavycoin_hash(&hash[0], &buf[0], 32);
-	printpfx("heavy", hash);
-
-	hmq17hash(&hash[0], &buf[0]);
-	printpfx("hmq1725", hash);
-
-	hsr_hash(&hash[0], &buf[0]);
-        printpfx("hsr", hash);
-
-	jha_hash(&hash[0], &buf[0]);
-	printpfx("jha", hash);
-
-	keccak256_hash(&hash[0], &buf[0]);
-	printpfx("keccak", hash);
-
-	memset(buf, 0, 128);
-	lbry_hash(&hash[0], &buf[0]);
-	printpfx("lbry", hash);
-
-	luffa_hash(&hash[0], &buf[0]);
-	printpfx("luffa", hash);
-
-	lyra2re_hash(&hash[0], &buf[0]);
-	printpfx("lyra2", hash);
-
-	lyra2v2_hash(&hash[0], &buf[0]);
-	printpfx("lyra2v2", hash);
-
-	lyra2v3_hash(&hash[0], &buf[0]);
-	printpfx("lyra2v3", hash);
-
-	lyra2Z_hash(&hash[0], &buf[0]);
-	printpfx("lyra2z", hash);
-
-	monero_hash(&hash[0], &buf[0]);
-	printpfx("monero", hash);
-
-	myriadhash(&hash[0], &buf[0]);
-	printpfx("myriad", hash);
-
-	neoscrypt(&hash[0], &buf[0], 80000620);
-	printpfx("neoscrypt", hash);
-
-	nist5hash(&hash[0], &buf[0]);
-	printpfx("nist5", hash);
-
-	pentablakehash(&hash[0], &buf[0]);
-	printpfx("pentablake", hash);
-
-	phi2_hash(&hash[0], &buf[0]);
-	printpfx("phi", hash);
-
-	polytimos_hash(&hash[0], &buf[0]);
-	printpfx("polytimos", hash);
-
-	quarkhash(&hash[0], &buf[0]);
-	printpfx("quark", hash);
-
-	qubithash(&hash[0], &buf[0]);
-	printpfx("qubit", hash);
-
-	scrypthash(&hash[0], &buf[0]);
-	printpfx("scrypt", hash);
-
-	scryptjane_hash(&hash[0], &buf[0]);
-	printpfx("scrypt-jane", hash);
+	printf(CL_WHT "CPU HASH ON EMPTY BUFFER RESULTS:" CL_N "
+");
 
 	sha256d_hash(&hash[0], &buf[0]);
 	printpfx("sha256d", hash);
 
-	sha256t_hash(&hash[0], &buf[0]);
-	printpfx("sha256t", hash);
-
-	sha256q_hash(&hash[0], &buf[0]);
-	printpfx("sha256q", hash);
-  
-	sia_blake2b_hash(&hash[0], &buf[0]);
-	printpfx("sia", hash);
-
-	sibhash(&hash[0], &buf[0]);
-	printpfx("sib", hash);
-
-	skeincoinhash(&hash[0], &buf[0]);
-	printpfx("skein", hash);
-
-	skein2hash(&hash[0], &buf[0]);
-	printpfx("skein2", hash);
-
-	skunk_hash(&hash[0], &buf[0]);
-	printpfx("skunk", hash);
-
-	stellite_hash(&hash[0], &buf[0]);
-	printpfx("stelitte", hash);
-
-	s3hash(&hash[0], &buf[0]);
-	printpfx("S3", hash);
-
-	timetravel_hash(&hash[0], &buf[0]);
-	printpfx("timetravel", hash);
-
-	bitcore_hash(&hash[0], &buf[0]);
-	printpfx("bitcore", hash);
-	
-	exosis_hash(&hash[0], &buf[0]);
-	printpfx("exosis", hash);
-
-	blake256hash(&hash[0], &buf[0], 8);
-	printpfx("vanilla", hash);
-
-	tribus_hash(&hash[0], &buf[0]);
-	printpfx("tribus", hash);
-
-	veltorhash(&hash[0], &buf[0]);
-	printpfx("veltor", hash);
-
-	wcoinhash(&hash[0], &buf[0]);
-	printpfx("whirlpool", hash);
-
-	//whirlxHash(&hash[0], &buf[0]);
-	//printpfx("whirlpoolx", hash);
-
-	x11evo_hash(&hash[0], &buf[0]);
-	printpfx("x11evo", hash);
-
-	x11hash(&hash[0], &buf[0]);
-	printpfx("x11", hash);
-
-	x12hash(&hash[0], &buf[0]);
-	printpfx("x12", hash);
-
-	x13hash(&hash[0], &buf[0]);
-	printpfx("x13", hash);
-
-	x14hash(&hash[0], &buf[0]);
-	printpfx("x14", hash);
-
-	x15hash(&hash[0], &buf[0]);
-	printpfx("x15", hash);
-
-	x16r_hash(&hash[0], &buf[0]);
-	printpfx("x16r", hash);
-
-	x16s_hash(&hash[0], &buf[0]);
-	printpfx("x16s", hash);
-
-	x17hash(&hash[0], &buf[0]);
-	printpfx("x17", hash);
-
-	//memcpy(buf, zrtest, 80);
-	zr5hash(&hash[0], &buf[0]);
-	//zr5hash_pok(&hash[0], (uint32_t*) &buf[0]);
-	printpfx("ZR5", hash);
-
-	printf("\n");
-
-	do_gpu_tests();
-
-	free(scratchbuf);
+	printf("
+");
 }
