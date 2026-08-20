@@ -223,6 +223,9 @@ static inline int algo_to_int(char* arg)
 			i = -1;
 	}
 
+	if (i >= 0 && i != ALGO_SHA256D && i != ALGO_SHA256DV && i != ALGO_AUTO)
+		i = -1;
+
 	return i;
 }
 
