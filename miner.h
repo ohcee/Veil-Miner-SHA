@@ -310,6 +310,7 @@ extern int scanhash_polytimos(int thr_id, struct work* work, uint32_t max_nonce,
 extern int scanhash_quark(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done);
 extern int scanhash_qubit(int thr_id, struct work* work, uint32_t max_nonce, unsigned long *hashes_done);
 extern int scanhash_sha256d(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done);
+extern int scanhash_sha256dv(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done);
 extern int scanhash_sha256t(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done);
 extern int scanhash_sha256q(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done);
 extern int scanhash_sia(int thr_id, struct work *work, uint32_t max_nonce, unsigned long *hashes_done);
@@ -385,6 +386,7 @@ extern void free_polytimos(int thr_id);
 extern void free_quark(int thr_id);
 extern void free_qubit(int thr_id);
 extern void free_sha256d(int thr_id);
+extern void free_sha256dv(int thr_id);
 extern void free_sha256t(int thr_id);
 extern void free_sha256q(int thr_id);
 extern void free_sia(int thr_id);
@@ -687,6 +689,14 @@ struct stratum_job {
 	uint32_t height;
 	uint32_t shares_count;
 	double diff;
+
+	// Veil sha256dv
+	bool veil_sha256dv;
+	uint32_t veil_version;
+	unsigned char veil_midstate_be[32];
+	unsigned char veil_merkle_be[32];
+	uint32_t veil_ntime;
+	uint32_t veil_nonce_hi;
 };
 
 struct stratum_ctx {
@@ -760,6 +770,15 @@ struct work {
 	struct tx txs[POK_MAX_TXS];
 	// zec solution
 	uint8_t extra[1388];
+
+	// Veil sha256dv
+	bool veil_sha256dv;
+	uint32_t veil_version;
+	unsigned char veil_midstate_be[32];
+	unsigned char veil_merkle_be[32];
+	uint32_t veil_ntime;
+	uint32_t veil_nonce_hi;
+	uint32_t veil_nonce_lo;
 };
 
 #define POK_BOOL_MASK 0x00008000

@@ -2371,6 +2371,9 @@ static void *miner_thread(void *userdata)
 		case ALGO_SHA256D:
 			rc = scanhash_sha256d(thr_id, &work, max_nonce, &hashes_done);
 			break;
+		case ALGO_SHA256DV:
+			rc = scanhash_sha256dv(thr_id, &work, max_nonce, &hashes_done);
+			break;
 
 		default:
 			/* should never happen */

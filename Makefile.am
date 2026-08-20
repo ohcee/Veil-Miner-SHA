@@ -26,7 +26,7 @@ ccminer_SOURCES	= elist.h miner.h compat.h \
 		  uint256.h \
 		  cuda_checkhash.cu \
 		  sph/sha2.c \
-		  sha256/sha256d.cu sha256/cuda_sha256d.cu
+		  sha256/sha256d.cu sha256/cuda_sha256d.cu sha256/sha256dv.cu
 
 if HAVE_NVML
 nvml_defs = -DUSE_WRAPNVML

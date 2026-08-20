@@ -50,6 +50,7 @@ void algo_free_all(int thr_id)
 {
 	// only initialized algos will be freed
 	free_sha256d(thr_id);
+	free_sha256dv(thr_id);
 }
 
 // benchmark all algos (called once per mining thread)
