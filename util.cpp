@@ -1438,6 +1438,53 @@ static uint32_t getblocheight(struct stratum_ctx *sctx)
 	return height;
 }
 
+static bool sha256dv_stratum_notify(struct stratum_ctx *sctx, json_t *params)
+{
+	if (!json_is_array(params) || json_array_size(params) < 11) {
+		applog(LOG_ERR, "Veil notify: expected 11 params");
+		return false;
+	}
+
+	const char *job_id       = json_string_value(json_array_get(params, 0));
+	json_t     *j_version    = json_array_get(params, 1);
+	const char *midstate_hex = json_string_value(json_array_get(params, 2));
+	const char *merkle_hex   = json_string_value(json_array_get(params, 3));
+	json_t     *j_ntime      = json_array_get(params, 5);
+	const char *nbits_hex    = json_string_value(json_array_get(params, 6));
+	json_t     *j_nonce_hi   = json_array_get(params, 7);
+	json_t     *j_clean      = json_array_get(params, 8);
+	json_t     *j_height     = json_array_get(params, 9);
+
+	if (!job_id || !json_is_integer(j_version) || !midstate_hex || !merkle_hex
+	    || !json_is_integer(j_ntime) || !nbits_hex || !json_is_integer(j_nonce_hi)
+	    || strlen(midstate_hex) != 64 || strlen(merkle_hex) != 64) {
+		applog(LOG_ERR, "Veil notify: bad params");
+		return false;
+	}
+
+	pthread_mutex_lock(&stratum_work_lock);
+
+	free(sctx->job.job_id);
+	sctx->job.job_id = strdup(job_id);
+	sctx->job.veil_sha256dv = true;
+	sctx->job.veil_version  = (uint32_t) json_integer_value(j_version);
+	hex2bin(sctx->job.veil_midstate_be, midstate_hex, 32);
+	hex2bin(sctx->job.veil_merkle_be,   merkle_hex,   32);
+	sctx->job.veil_ntime    = (uint32_t) json_integer_value(j_ntime);
+	sctx->job.veil_nonce_hi = (uint32_t) json_integer_value(j_nonce_hi);
+	hex2bin(sctx->job.nbits, nbits_hex, 4);
+	sctx->job.clean  = j_clean ? json_is_true(j_clean) : true;
+	sctx->job.height = j_height ? (uint32_t) json_integer_value(j_height) : 0;
+	sctx->job.diff   = sctx->next_diff;
+
+	pthread_mutex_unlock(&stratum_work_lock);
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Veil job %s height %u ntime %08x", job_id,
+			sctx->job.height, sctx->job.veil_ntime);
+	return true;
+}
+
 static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 {
 	const char *job_id, *prevhash, *coinb1, *coinb2, *version, *nbits, *stime;
@@ -1457,6 +1504,9 @@ static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 	if (sctx->is_equihash) {
 		return false;
 	}
+
+	if (!strcmp(algo, "sha256dv"))
+		return sha256dv_stratum_notify(sctx, params);
 
 	job_id = json_string_value(json_array_get(params, p++));
 	prevhash = json_string_value(json_array_get(params, p++));

@@ -964,6 +964,28 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 	}
 
 	if (pool->type & POOL_STRATUM) {
+		if (opt_algo == ALGO_SHA256DV) {
+			uint32_t e_hi, e_lo, e_nt;
+			le32enc(&e_hi, work->veil_nonce_hi);
+			le32enc(&e_lo, work->veil_nonce_lo);
+			le32enc(&e_nt, work->veil_ntime);
+			char *hi = bin2hex((const uchar*)&e_hi, 4);
+			char *lo = bin2hex((const uchar*)&e_lo, 4);
+			char *nt = bin2hex((const uchar*)&e_nt, 4);
+			stratum.sharediff = work->sharediff[idnonce];
+			sprintf(s, "{\"method\": \"mining.submit\", \"params\": ["
+					"\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\":%u}",
+					pool->user, work->job_id + 8, hi, nt, lo, stratum.job.shares_count + 10);
+			free(hi); free(lo); free(nt);
+			gettimeofday(&stratum.tv_submit, NULL);
+			if (unlikely(!stratum_send_line(&stratum, s))) {
+				applog(LOG_ERR, "submit_upstream_work stratum_send_line failed");
+				return false;
+			}
+			stratum.job.shares_count++;
+			return true;
+		}
+
 		uint32_t sent = 0;
 		uint32_t ntime, nonce = work->nonces[idnonce];
 		char *ntimestr, *noncestr, *xnonce2str, *nvotestr;
@@ -1563,6 +1585,26 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 		// applog(LOG_WARNING, "stratum_gen_work: job not yet retrieved");
 		return false;
 	}
+
+	if (sctx->job.veil_sha256dv) {
+		pthread_mutex_lock(&stratum_work_lock);
+		snprintf(work->job_id, sizeof(work->job_id), "%07x %s",
+			sctx->job.veil_ntime & 0xfffffff, sctx->job.job_id);
+		work->veil_sha256dv = true;
+		work->veil_version  = sctx->job.veil_version;
+		memcpy(work->veil_midstate_be, sctx->job.veil_midstate_be, 32);
+		memcpy(work->veil_merkle_be,   sctx->job.veil_merkle_be,   32);
+		work->veil_ntime    = sctx->job.veil_ntime;
+		work->veil_nonce_hi = sctx->job.veil_nonce_hi;
+		work->veil_nonce_lo = 0;
+		work->pooln  = sctx->pooln;
+		work->height = sctx->job.height;
+		for (int k = 0; k < 20; k++) work->data[k] = 0;
+		pthread_mutex_unlock(&stratum_work_lock);
+		work_set_target(work, sctx->job.diff / opt_difficulty);
+		return true;
+	}
+
 
 	pthread_mutex_lock(&stratum_work_lock);
 
