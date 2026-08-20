@@ -25,3 +25,6 @@ Makefile.in
 /stamp-h1
 /libtool
 *~
+
+# AMD OpenCL miner binary
+/opencl/veil-miner-sha-amd

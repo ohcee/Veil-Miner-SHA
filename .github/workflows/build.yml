@@ -46,3 +46,18 @@ jobs:
         run: |
           test -x ./ccminer && echo "ccminer built OK"
           file ./ccminer
+
+  opencl-amd:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenCL + crypto headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ocl-icd-opencl-dev opencl-headers libssl-dev
+      - name: Compile AMD OpenCL host
+        run: |
+          cc -O3 -Wall opencl/miner.c -o /tmp/veil-miner-sha-amd -lOpenCL -lcrypto -lpthread
+          test -f opencl/veil_sha256dv.cl && echo "kernel present"
+          echo "AMD OpenCL host builds"

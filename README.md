@@ -7,6 +7,9 @@ stripped down to the Veil SHA256D algorithm and taught the Veil `sha256dv`
 stratum protocol (custom `mining.notify`, 64 bit nonce, midstate + merkle
 supplied by the pool).
 
+**NVIDIA (CUDA):** the ccminer-derived miner at the repository root.
+**AMD (OpenCL):** see [`opencl/`](opencl/).
+
 Status: work in progress. See the `build` workflow for CI compile status.
 
 ## Algorithm
