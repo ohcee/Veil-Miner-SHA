@@ -29,21 +29,20 @@ jobs:
       - name: nvcc version
         run: nvcc --version
 
-      # Milestone 1: prove the toolchain + the SHA256D kernel we build on.
-      # Full `make` of the Veil-only tree is enabled once the strip lands.
-      - name: autogen + configure (smoke)
+      - name: autogen + configure
         run: |
           ./autogen.sh
           CUDA_CFLAGS="-O3 -Xcompiler -Wall -D_FORCE_INLINES" \
             ./configure CXXFLAGS="-O3 -D_REENTRANT" \
             --with-cuda="$CUDA_PATH" --with-nvml=libnvidia-ml.so
 
-      - name: Compile SHA256D CUDA kernel (modern arch)
+      - name: make
         run: |
-          for SM in 75 86 89 90; do
-            echo "== sm_${SM} =="
-            nvcc -std=c++14 -I. -I"$CUDA_PATH/include" \
-              -gencode=arch=compute_${SM},code=sm_${SM} \
-              -D_FORCE_INLINES -c sha256/cuda_sha256d.cu -o /tmp/cuda_sha256d_sm${SM}.o
-          done
-          echo "sha256d kernel compiles clean on CUDA 12.4 / sm_75..sm_90"
+          # libcuda.so is a driver lib; on a GPU-less runner use the toolkit stub.
+          export LIBRARY_PATH="$CUDA_PATH/lib64/stubs:$LIBRARY_PATH"
+          make -j"$(nproc)"
+
+      - name: verify binary
+        run: |
+          test -x ./ccminer && echo "ccminer built OK"
+          file ./ccminer
