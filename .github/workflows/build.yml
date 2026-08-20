@@ -1,0 +1,49 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-cuda:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential automake autoconf libtool pkg-config \
+            libcurl4-openssl-dev libssl-dev libjansson-dev libgmp-dev
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.19
+        id: cuda
+        with:
+          cuda: '12.4.1'
+          method: 'network'
+          sub-packages: '["nvcc", "cudart"]'
+
+      - name: nvcc version
+        run: nvcc --version
+
+      # Milestone 1: prove the toolchain + the SHA256D kernel we build on.
+      # Full `make` of the Veil-only tree is enabled once the strip lands.
+      - name: autogen + configure (smoke)
+        run: |
+          ./autogen.sh
+          CUDA_CFLAGS="-O3 -Xcompiler -Wall -D_FORCE_INLINES" \
+            ./configure CXXFLAGS="-O3 -D_REENTRANT" \
+            --with-cuda="$CUDA_PATH" --with-nvml=libnvidia-ml.so
+
+      - name: Compile SHA256D CUDA kernel (modern arch)
+        run: |
+          for SM in 75 86 89 90; do
+            echo "== sm_${SM} =="
+            nvcc -std=c++14 -I. -I"$CUDA_PATH/include" \
+              -gencode=arch=compute_${SM},code=sm_${SM} \
+              -D_FORCE_INLINES -c sha256/cuda_sha256d.cu -o /tmp/cuda_sha256d_sm${SM}.o
+          done
+          echo "sha256d kernel compiles clean on CUDA 12.4 / sm_75..sm_90"

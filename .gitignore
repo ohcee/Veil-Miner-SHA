@@ -1,0 +1,27 @@
+# build artifacts
+*.o
+*.lo
+*.la
+*.a
+/ccminer
+Makefile
+Makefile.in
+/config.log
+/config.status
+/configure
+/aclocal.m4
+/autom4te.cache/
+/compile
+/config.guess
+/config.sub
+/depcomp
+/install-sh
+/missing
+/ltmain.sh
+.deps/
+.libs/
+/cpuminer-config.h
+/ccminer-config.h*
+/stamp-h1
+/libtool
+*~
