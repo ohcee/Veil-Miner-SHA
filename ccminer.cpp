@@ -1932,7 +1932,7 @@ static void *miner_thread(void *userdata)
 			nonceptr = (uint32_t*) (((char*)work.data) + 39);
 			wcmplen = 39;
 		} else if (opt_algo == ALGO_EQUIHASH) {
-			nonceptr = &work.data[EQNONCE_OFFSET]; // 27 is pool extranonce (256bits nonce space)
+			nonceptr = &work.data[27]; // 27 is pool extranonce (256bits nonce space)
 			wcmplen = 4+32+32;
 		}
 

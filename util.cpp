@@ -2158,18 +2158,16 @@ void do_gpu_tests(void)
 
 void print_hash_tests(void)
 {
-	char s[128] = {' '};
+	char s[128] = {'\0'};
 	uchar hash[128];
 	uchar buf[192];
 
 	memset(buf, 0, sizeof buf);
 
-	printf(CL_WHT "CPU HASH ON EMPTY BUFFER RESULTS:" CL_N "
-");
+	printf(CL_WHT "CPU HASH ON EMPTY BUFFER RESULTS:" CL_N "\n");
 
 	sha256d_hash(&hash[0], &buf[0]);
 	printpfx("sha256d", hash);
 
-	printf("
-");
+	printf("\n");
 }
