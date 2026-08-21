@@ -52,6 +52,22 @@ cd Veil-Miner-SHA
 ./ccminer -a sha256dv -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x
 ```
 
+Building from source needs the CUDA 12.x toolkit (the tree targets sm_75 through
+sm_90). If you only have the stock Ubuntu apt CUDA (11.5), use the prebuilt binary.
+
+### Prebuilt binary (skip the build)
+
+Needs only the **NVIDIA driver** (`libcudart` is bundled), plus two small libs:
+
+```bash
+sudo apt install -y libcurl4 libjansson4
+wget https://github.com/ohcee/Veil-Miner-SHA/releases/latest/download/veil-miner-sha-nvidia-linux-x64.tar.gz
+tar xzf veil-miner-sha-nvidia-linux-x64.tar.gz && cd veil-miner-sha-nvidia
+./run.sh -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x
+```
+
+`run.sh` sets `LD_LIBRARY_PATH` and passes `-a sha256dv` for you.
+
 ## Algorithm
 
 Veil SHA256D hashes an 80 byte header:
