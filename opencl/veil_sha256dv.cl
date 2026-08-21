@@ -1,8 +1,8 @@
-/* Veil SHA256Dv OpenCL kernel.
- * Hashes the 80-byte Veil header (20 big-endian message words m[0..19]),
- * sweeping word 19 (the swept half of the 64-bit nonce), and reports any
- * message-word-19 value whose SHA256d is <= target. Validated against
- * OpenSSL sha256d. */
+/* Veil SHA256Dv OpenCL kernel, midstate-optimized.
+ * The first 64 bytes of the 80 byte header are constant for a job, so the host
+ * pre-hashes them into an 8 word midstate. The kernel only runs the second
+ * SHA block (tail word + swept nonce) and the final SHA. ~2x vs hashing all 80
+ * bytes per nonce. Output word19 values whose SHA256d <= target. */
 
 __constant uint K[64] = {
  0x428a2f98u,0x71374491u,0xb5c0fbcfu,0xe9b5dba5u,0x3956c25bu,0x59f111f1u,0x923f82a4u,0xab1c5ed5u,
@@ -37,46 +37,31 @@ void sha256_block(uint st[8], const uint in[16]) {
   st[0]+=a;st[1]+=b;st[2]+=c;st[3]+=d;st[4]+=e;st[5]+=f;st[6]+=g;st[7]+=h;
 }
 
-inline void sha256d80(const uint m[19], uint word19, uint out[8]) {
-  const uint H[8]={0x6a09e667u,0xbb67ae85u,0x3c6ef372u,0xa54ff53au,0x510e527fu,0x9b05688cu,0x1f83d9abu,0x5be0cd19u};
-  uint st[8]; for(int i=0;i<8;i++) st[i]=H[i];
-  uint b1[16]; for(int i=0;i<16;i++) b1[i]=m[i];
-  sha256_block(st,b1);
+#define MAX_RESULTS 15
+/* in[0..7] = midstate after the first 64 bytes; in[8..10] = message words 16,17,18. */
+__kernel void veil_search(__global const uint* in,
+                          const uint start_word19,
+                          __global const uint* target,
+                          __global uint* out) {
+  uint gid = get_global_id(0);
+  uint word19 = start_word19 + gid;
+
+  uint st[8];
+  for(int i=0;i<8;i++) st[i]=in[i];
+
   uint b2[16];
-  b2[0]=m[16]; b2[1]=m[17]; b2[2]=m[18]; b2[3]=word19;
+  b2[0]=in[8]; b2[1]=in[9]; b2[2]=in[10]; b2[3]=word19;
   b2[4]=0x80000000u; for(int i=5;i<15;i++) b2[i]=0u; b2[15]=0x280u;
-  sha256_block(st,b2);
+  sha256_block(st, b2);
+
+  const uint H[8]={0x6a09e667u,0xbb67ae85u,0x3c6ef372u,0xa54ff53au,0x510e527fu,0x9b05688cu,0x1f83d9abu,0x5be0cd19u};
   uint st2[8]; for(int i=0;i<8;i++) st2[i]=H[i];
   uint b3[16];
   for(int i=0;i<8;i++) b3[i]=st[i];
   b3[8]=0x80000000u; for(int i=9;i<15;i++) b3[i]=0u; b3[15]=0x100u;
-  sha256_block(st2,b3);
-  for(int i=0;i<8;i++) out[i]=st2[i];
-}
+  sha256_block(st2, b3);
 
-/* out[0]=count, out[1..]=winning word19 values (=swab32(nonce_hi)). */
-#define MAX_RESULTS 15
-__kernel void veil_search(__global const uint* m,          /* 19 words m[0..18] */
-                          const uint start_word19,
-                          __global const uint* target,     /* target[8], MSW at [7] */
-                          __global uint* out) {
-  uint gid = get_global_id(0);
-  uint word19 = start_word19 + gid;
-  uint mm[19]; for(int i=0;i<19;i++) mm[i]=m[i];
-  uint h[8];
-  sha256d80(mm, word19, h);
-  /* MSW-first compare: digest word 7 is most significant */
-  bool ok = true;
-  for(int i=7;i>=0;i--){ if(h[i]>target[i]){ok=false;break;} if(h[i]<target[i]){break;} }
-  if(ok){
-    uint idx = atomic_inc(&out[0]);
-    if(idx < MAX_RESULTS) out[1+idx]=word19;
-  }
-}
-
-/* self-test entry: hash m[0..18]+word19 once, write 8-word digest to out */
-__kernel void veil_hash1(__global const uint* m, const uint word19, __global uint* out){
-  uint mm[19]; for(int i=0;i<19;i++) mm[i]=m[i];
-  uint h[8]; sha256d80(mm, word19, h);
-  for(int i=0;i<8;i++) out[i]=h[i];
+  bool ok=true;
+  for(int i=7;i>=0;i--){ if(st2[i]>target[i]){ok=false;break;} if(st2[i]<target[i])break; }
+  if(ok){ uint idx=atomic_inc(&out[0]); if(idx<MAX_RESULTS) out[1+idx]=word19; }
 }
