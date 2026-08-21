@@ -1,0 +1,49 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  amd-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ocl-icd-opencl-dev opencl-headers libssl-dev
+
+      - name: Build AMD OpenCL miner
+        run: cc -O3 -Wall opencl/miner.c -o veil-miner-sha-amd -lOpenCL -lcrypto -lpthread
+
+      - name: Package
+        run: |
+          mkdir -p pkg/veil-miner-sha-amd
+          cp veil-miner-sha-amd opencl/veil_sha256dv.cl pkg/veil-miner-sha-amd/
+          cp -r opencl/hiveos pkg/veil-miner-sha-amd/
+          printf 'Veil-Miner-SHA (AMD / OpenCL)\n\nInstall an AMD OpenCL runtime first (from the repo: ./setup-ubuntu.sh --rocm),\nthen run:\n\n  HSA_OVERRIDE_GFX_VERSION=10.3.0 ./veil-miner-sha-amd -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x\n\nThe HSA override is only needed on RDNA2 cards (e.g. RX 6600 XT).\n' > pkg/veil-miner-sha-amd/RUN.txt
+          tar -C pkg -czf veil-miner-sha-amd-linux-x64.tar.gz veil-miner-sha-amd
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="nightly"
+            gh release delete "$TAG" -y --cleanup-tag 2>/dev/null || true
+          else
+            TAG="$GITHUB_REF_NAME"
+          fi
+          gh release create "$TAG" \
+            veil-miner-sha-amd-linux-x64.tar.gz veil-miner-sha-amd opencl/veil_sha256dv.cl \
+            --title "$TAG" \
+            --notes "Prebuilt AMD OpenCL miner for Linux x64 (built on Ubuntu 22.04). Download the tarball, extract, install an AMD OpenCL runtime (repo \`setup-ubuntu.sh --rocm\`), then run. Runtime deps: libOpenCL + libcrypto, standard on Ubuntu." \
+          || gh release upload "$TAG" \
+            veil-miner-sha-amd-linux-x64.tar.gz veil-miner-sha-amd opencl/veil_sha256dv.cl --clobber
