@@ -29,6 +29,18 @@ the RX 6600 XT. The miner auto-selects the first AMD GPU, so on a mixed rig it
 leaves NVIDIA cards to ccminer. See [`opencl/README.md`](opencl/README.md) for
 device selection, tuning flags, and the HiveOS package.
 
+### Prebuilt binary (skip the build)
+
+You still need an AMD OpenCL runtime (`./setup-ubuntu.sh --rocm`, or
+`amdgpu-install --usecase=opencl`), but you can skip compiling:
+
+```bash
+wget https://github.com/ohcee/Veil-Miner-SHA/releases/latest/download/veil-miner-sha-amd-linux-x64.tar.gz
+tar xzf veil-miner-sha-amd-linux-x64.tar.gz && cd veil-miner-sha-amd
+HSA_OVERRIDE_GFX_VERSION=10.3.0 ./veil-miner-sha-amd \
+    -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x
+```
+
 ## Quick start, NVIDIA
 
 Needs the NVIDIA driver and the CUDA toolkit (12.x).
