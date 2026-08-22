@@ -1528,7 +1528,15 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 		work->veil_nonce_lo = 0;
 		work->pooln  = sctx->pooln;
 		work->height = sctx->job.height;
-		for (int k = 0; k < 20; k++) work->data[k] = 0;
+		// Fill work->data with the job header so ccminer detects new work
+		// (its new-job check is memcmp(work.data,g_work.data); scanhash reads veil_*).
+		for (int k = 0; k < 32; k++) work->data[k] = 0;
+		work->data[0] = sctx->job.veil_version;
+		memcpy(&work->data[1], sctx->job.veil_midstate_be, 32);
+		memcpy(&work->data[9], sctx->job.veil_merkle_be, 32);
+		work->data[17] = sctx->job.veil_ntime;
+		work->data[18] = sctx->job.veil_nonce_hi;
+		work->data[19] = 0;
 		pthread_mutex_unlock(&stratum_work_lock);
 		work_set_target(work, sctx->job.diff / opt_difficulty);
 		return true;
