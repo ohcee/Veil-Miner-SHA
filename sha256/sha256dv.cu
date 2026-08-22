@@ -75,15 +75,19 @@ extern "C" int scanhash_sha256dv(int thr_id, struct work* work, uint32_t max_non
 	sha256d_setBlock_80(blk, ptarget);
 
 	// The kernel iterates message word 19 == swab32(nonce_hi); seed from the pool base.
+	// word19 wraps freely (uint32); we count hashes with a separate accumulator so
+	// the reported rate never underflows when the sweep passes the start point.
 	const uint32_t first = be32dec(stage2 + 76);
 	uint32_t n = first;
-	if (init[thr_id])
-		throughput = min(throughput, (max_nonce > first) ? (max_nonce - first) : throughput);
+	uint64_t done = 0;
+	// nonces to scan this call: ccminer's scan-time budget, or a sane batch
+	uint64_t budget = (max_nonce > first) ? (uint64_t)(max_nonce - first) : (uint64_t) throughput * 64;
+	if (budget < throughput) budget = throughput;
 
 	do {
-		*hashes_done = (uint64_t) n - first + throughput;
-
 		sha256d_hash_80(thr_id, throughput, n, work->nonces);
+		done += throughput;
+
 		if (work->nonces[0] != UINT32_MAX) {
 			uint32_t _ALIGN(64) vhash[8];
 			const uint32_t N = work->nonces[0];
@@ -97,7 +101,7 @@ extern "C" int scanhash_sha256dv(int thr_id, struct work* work, uint32_t max_non
 				work->veil_nonce_hi = nonce_hi;
 				work->veil_nonce_lo = nonce_lo;
 				work_set_target_ratio(work, vhash);
-				*hashes_done = (uint64_t) n - first + throughput;
+				*hashes_done = done;
 				return 1;
 			}
 			else {
@@ -109,15 +113,11 @@ extern "C" int scanhash_sha256dv(int thr_id, struct work* work, uint32_t max_non
 			}
 		}
 
-		if ((uint64_t) throughput + n >= max_nonce) {
-			n = max_nonce;
-			break;
-		}
 		n += throughput;
 
-	} while (!work_restart[thr_id].restart);
+	} while (!work_restart[thr_id].restart && done < budget);
 
-	*hashes_done = (uint64_t) n - first;
+	*hashes_done = done;
 	return 0;
 }
 
