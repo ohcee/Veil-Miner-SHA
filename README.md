@@ -99,6 +99,13 @@ Import the key once:
 gpg --keyserver keys.openpgp.org --recv-keys 5C2CFA030397FCD763F1A97BF8788EFB40E750E5
 ```
 
+If GnuPG cannot reach the keyserver (some macOS builds of GnuPG 2.5 fail with
+"Try again later"), fetch the key over plain HTTPS instead:
+
+```bash
+curl -s https://keys.openpgp.org/vks/v1/by-fingerprint/5C2CFA030397FCD763F1A97BF8788EFB40E750E5 | gpg --import
+```
+
 Then check the sums file against it:
 
 ```bash
