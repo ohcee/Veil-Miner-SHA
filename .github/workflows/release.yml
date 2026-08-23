@@ -99,7 +99,10 @@ jobs:
           gh release download "$TAG" -D dist --clobber
           cd dist
           rm -f SHA256SUMS SHA256SUMS.txt SHA256SUMS.txt.asc
-          find . -maxdepth 1 -type f -printf '%P\n' | sort | xargs sha256sum > SHA256SUMS.txt
+          # Leave the sum file itself out: the shell creates SHA256SUMS.txt for
+          # the redirect before find runs, so without this it lists its own
+          # (empty) hash and every sha256sum -c run ends with one FAILED line.
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS*' -printf '%P\n' | sort | xargs sha256sum > SHA256SUMS.txt
           cat SHA256SUMS.txt
           gh release upload "$TAG" SHA256SUMS.txt --clobber
           # Retire the old name so a release never carries two sum files that
