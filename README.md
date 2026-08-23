@@ -70,16 +70,21 @@ tar xzf veil-miner-sha-nvidia-linux-x64.tar.gz && cd veil-miner-sha-nvidia
 
 ## Verify a download
 
-Every release ships a `SHA256SUMS` file written by the same CI job that built the
-tarballs. Fetch it from the release you downloaded from and check the tarball against it:
+Every release ships a `SHA256SUMS.txt` file written by the same CI job that built the
+release, covering every file attached to it: both tarballs, the bare
+`veil-miner-sha-amd` executable and the `veil_sha256dv.cl` kernel. Fetch it from the
+release you downloaded from and check your download against it:
 
 ```bash
-wget https://github.com/ohcee/Veil-Miner-SHA/releases/latest/download/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS
+wget https://github.com/ohcee/Veil-Miner-SHA/releases/latest/download/SHA256SUMS.txt
+sha256sum -c --ignore-missing SHA256SUMS.txt
 ```
 
-`--ignore-missing` skips whichever tarball you did not download. You want a line ending
+`--ignore-missing` skips whatever you did not download. You want a line ending
 in `OK`. Anything else means the file is not what CI built, so do not run it.
+
+Releases up to v0.1.6 shipped this file as `SHA256SUMS` with no extension, and it
+covered only the two tarballs.
 
 ## Algorithm
 

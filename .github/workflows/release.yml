@@ -84,14 +84,24 @@ jobs:
         run: |
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then TAG="nightly"; else TAG="$GITHUB_REF_NAME"; fi
           gh release upload "$TAG" veil-miner-sha-nvidia-linux-x64.tar.gz --clobber
-      - name: Publish SHA256SUMS for both tarballs
+      - name: Publish SHA256SUMS.txt over every published asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then TAG="nightly"; else TAG="$GITHUB_REF_NAME"; fi
-          # The AMD tarball was built and uploaded by the amd-linux job. Sum the
-          # published copy, so the file covers exactly what users download.
-          gh release download "$TAG" -p 'veil-miner-sha-amd-linux-x64.tar.gz' --clobber
-          sha256sum veil-miner-sha-amd-linux-x64.tar.gz veil-miner-sha-nvidia-linux-x64.tar.gz > SHA256SUMS
-          cat SHA256SUMS
-          gh release upload "$TAG" SHA256SUMS --clobber
+          # Download whatever the release actually holds rather than naming
+          # files here. The release also carries the bare veil-miner-sha-amd
+          # executable and veil_sha256dv.cl, and naming only the two tarballs
+          # left those two uncovered. Summing the published copies also means
+          # the file describes what users download, not a local build.
+          mkdir -p dist
+          gh release download "$TAG" -D dist --clobber
+          cd dist
+          rm -f SHA256SUMS SHA256SUMS.txt SHA256SUMS.txt.asc
+          find . -maxdepth 1 -type f -printf '%P\n' | sort | xargs sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "$TAG" SHA256SUMS.txt --clobber
+          # Retire the old name so a release never carries two sum files that
+          # could disagree.
+          gh release delete-asset "$TAG" SHA256SUMS -y 2>/dev/null || true
