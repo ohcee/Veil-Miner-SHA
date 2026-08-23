@@ -84,3 +84,14 @@ jobs:
         run: |
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then TAG="nightly"; else TAG="$GITHUB_REF_NAME"; fi
           gh release upload "$TAG" veil-miner-sha-nvidia-linux-x64.tar.gz --clobber
+      - name: Publish SHA256SUMS for both tarballs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then TAG="nightly"; else TAG="$GITHUB_REF_NAME"; fi
+          # The AMD tarball was built and uploaded by the amd-linux job. Sum the
+          # published copy, so the file covers exactly what users download.
+          gh release download "$TAG" -p 'veil-miner-sha-amd-linux-x64.tar.gz' --clobber
+          sha256sum veil-miner-sha-amd-linux-x64.tar.gz veil-miner-sha-nvidia-linux-x64.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$TAG" SHA256SUMS --clobber

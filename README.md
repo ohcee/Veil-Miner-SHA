@@ -68,6 +68,19 @@ tar xzf veil-miner-sha-nvidia-linux-x64.tar.gz && cd veil-miner-sha-nvidia
 
 `run.sh` sets `LD_LIBRARY_PATH` and passes `-a sha256dv` for you.
 
+## Verify a download
+
+Every release ships a `SHA256SUMS` file written by the same CI job that built the
+tarballs. Fetch it from the release you downloaded from and check the tarball against it:
+
+```bash
+wget https://github.com/ohcee/Veil-Miner-SHA/releases/latest/download/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+```
+
+`--ignore-missing` skips whichever tarball you did not download. You want a line ending
+in `OK`. Anything else means the file is not what CI built, so do not run it.
+
 ## Algorithm
 
 Veil SHA256D hashes an 80 byte header:
@@ -84,13 +97,18 @@ work happens on the miner side.
 
 ## Status
 
-* **AMD (OpenCL):** validated end to end against the live pool, with pool-accepted
-  shares. The sha256d kernel is checked against OpenSSL.
-* **NVIDIA (CUDA):** builds in CI and reuses ccminer's sha256d kernel unchanged. It
-  shares the exact stratum and header code the AMD build proved live, and the
-  endianness was reviewed line by line. Real-card run is pending.
+Both miners are proven on live chains, not only in CI:
 
-Every push is built by CI (a CUDA job for the NVIDIA tree, an OpenCL job for the AMD host).
+* **AMD (OpenCL):** pool accepted shares on the live pool, and real testnet blocks
+  solo mined through a local node at a hard share target.
+* **NVIDIA (CUDA):** real testnet blocks solo mined on an RTX 3060 and an RTX 3080 Ti,
+  and on 2026-08-22 an RTX 3080 Ti mined **mainnet block 3968142**, the first GPU
+  mined Veil SHA256D block on mainnet.
+
+Use v0.1.5 or later. Earlier builds only swept a 32 bit slice of the 64 bit Veil
+nonce, which was enough for testnet but could not find blocks at mainnet difficulty.
+The sha256d kernel is checked against OpenSSL, and every push is built by CI (a CUDA
+job for the NVIDIA tree, an OpenCL job for the AMD host).
 
 ## License
 
