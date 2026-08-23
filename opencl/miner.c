@@ -142,6 +142,7 @@ static void submit_share(const job_t*j,uint32_t nonce_hi,uint32_t nonce_lo){
   char hi[9],lo[9],nt[9];bin2hex(hi,ehi,4);bin2hex(lo,elo,4);bin2hex(nt,ent,4);
   char s[512];
   snprintf(s,sizeof s,"{\"id\":4,\"method\":\"mining.submit\",\"params\":[\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"]}",g_user,j->job_id,hi,nt,lo);
+  if(getenv("DBG")) fprintf(stderr,"RAW> %s\n",s);
   send_line(s);
 }
 
@@ -198,12 +199,17 @@ int main(int argc,char**argv){
 
   uint32_t cur_gen=(uint32_t)-1; job_t job; uint32_t in11[11],target[8],startw; int have=0;
   size_t batch=(size_t)1<<batch_log; uint32_t base=0; long hashes=0; time_t t0=time(0), tstart=time(0);
+  /* The miner's half of the 64 bit nonce (header word 18). The kernel sweeps
+     word 19; each time that wraps we step nonce_lo, so a job covers the whole
+     64 bit space instead of the same 2^32 slice over and over. It starts at a
+     random point so miners sharing a proxy do not grind the same pairs. */
+  srand((unsigned)time(0)); uint32_t nonce_lo=((uint32_t)rand()<<16)^(uint32_t)rand()^(uint32_t)time(0);
   const uint32_t H0[8]={0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
   for(;;){
     pthread_mutex_lock(&g_lock);
     int changed=(g_gen!=cur_gen);
     if(changed){ cur_gen=g_gen; job=g_job; have=g_have_job; double d=g_diff;
-      if(have){ uint8_t s2[80]; build_stage2(s2,&job,0,job.nonce_hi);
+      if(have){ uint8_t s2[80]; build_stage2(s2,&job,nonce_lo,job.nonce_hi);
         uint32_t m[20]; for(int i=0;i<20;i++) m[i]=be32dec(s2+4*i);
         uint32_t mid[8]; for(int i=0;i<8;i++) mid[i]=H0[i]; sha256_block_host(mid,&m[0]);
         for(int i=0;i<8;i++) in11[i]=mid[i]; in11[8]=m[16]; in11[9]=m[17]; in11[10]=m[18];
@@ -223,14 +229,20 @@ int main(int argc,char**argv){
     uint32_t res[16]; clEnqueueReadBuffer(q,bo,CL_TRUE,0,16*4,res,0,0,0);
     if(res[0]){ for(uint32_t i=0;i<res[0]&&i<15;i++){
         uint32_t W=res[1+i], nonce_hi=swab32(W);
-        uint8_t s2[80]; build_stage2(s2,&job,0,nonce_hi);
+        uint8_t s2[80]; build_stage2(s2,&job,nonce_lo,nonce_hi);
         uint8_t h1[32],h2[32]; SHA256(s2,80,h1); SHA256(h1,32,h2);
         uint32_t hl[8]; for(int k=0;k<8;k++) hl[k]=be32dec(h2+4*k);
         int ok=1; for(int k=7;k>=0;k--){ if(hl[k]>target[k]){ok=0;break;} if(hl[k]<target[k])break; }
-        if(ok) submit_share(&job,nonce_hi,0);
+        if(ok) submit_share(&job,nonce_hi,nonce_lo);
         else fprintf(stderr,"%s[warn] gpu nonce %08x failed CPU verify%s\n",C_YEL,W,C_RST);
     } }
-    hashes+=batch; base+=batch;
+    hashes+=batch;
+    { uint32_t nb=base+(uint32_t)batch;
+      if(nb<base){ /* word 19 wrapped: next nonce_lo. Word 18 is in the second
+                      SHA block, so only the tail word changes, midstate stays. */
+        nonce_lo++; uint8_t s2[80]; build_stage2(s2,&job,nonce_lo,job.nonce_hi);
+        in11[10]=be32dec(s2+72); clEnqueueWriteBuffer(q,bm,CL_TRUE,0,11*4,in11,0,0,0); }
+      base=nb; }
     time_t now=time(0);
     if(now-t0>=5){ double mhs=hashes/1e6/(now-t0); char hs[32],up[16]; fmt_hs(mhs,hs); fmt_up(now-tstart,up); char ts[16];tstamp(ts);
       fprintf(stderr,"%s%s%s  %s⚡ %s%s   %s✓ %ld%s %s✗ %ld%s   %sup %s%s\n",
