@@ -41,7 +41,7 @@ static bool init[MAX_GPUS] = { 0 };
 
 // Where the sweep is, kept between scanhash calls.
 struct veil_scan_state {
-	uint8_t  key[76];    // version | midstate | merkle | ntime | lane start
+	uint8_t  key[72];    // version | midstate | merkle | ntime
 	uint32_t nonce_lo;   // header word 18, stepped each time word 19 wraps
 	uint32_t next_w19;   // next message word 19 (== swab32(nonce_hi)) to hash
 	bool     have_key;
@@ -63,14 +63,16 @@ static void veil_build_stage2(uint8_t out[80], const struct work *work,
 }
 
 // Everything that identifies a job, so a new job is detected by content.
-static void veil_job_key(uint8_t key[76], const struct work *work)
+// veil_nonce_hi is deliberately left out: a hit overwrites it with the
+// solving nonce, and keying on it would make that hit look like a new job
+// and restart the sweep right on top of it.
+static void veil_job_key(uint8_t key[72], const struct work *work)
 {
 	uint8_t *p = key;
 	le32enc(p, work->veil_version);           p += 4;
 	memcpy(p, work->veil_midstate_be, 32);    p += 32;
 	memcpy(p, work->veil_merkle_be, 32);      p += 32;
-	le32enc(p, work->veil_ntime);             p += 4;
-	le32enc(p, work->veil_nonce_hi);                    // pool assigned lane start
+	le32enc(p, work->veil_ntime);
 }
 
 // Upload the header for the given nonce_lo. Word 19 is swept by the kernel,
@@ -88,7 +90,7 @@ static void veil_load_block(const struct work *work, uint32_t nonce_lo, uint32_t
 extern "C" int scanhash_sha256dv(int thr_id, struct work* work, uint32_t max_nonce, unsigned long *hashes_done)
 {
 	uint8_t  stage2[80];
-	uint8_t  key[76];
+	uint8_t  key[72];
 	uint32_t *ptarget = work->target;
 	uint32_t throughput = cuda_default_throughput(thr_id, 1U << 25);
 	veil_scan_state &st = scan_state[thr_id];
