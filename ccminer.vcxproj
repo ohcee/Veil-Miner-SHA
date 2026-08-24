@@ -195,6 +195,7 @@
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <CudaCompile>
+      <Runtime>MT</Runtime>
       <CInterleavedPTX>false</CInterleavedPTX>
       <MaxRegCount>80</MaxRegCount>
       <PtxAsOptionV>true</PtxAsOptionV>
