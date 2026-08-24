@@ -112,8 +112,11 @@ jobs:
           # a stray pthread/curl/cudart/jansson/zlib DLL means the static link
           # silently fell back, so fail loudly if one appears
           $deps = ($out | Select-String "\.dll") -join "`n"
-          # static /MT everywhere: no third party libs and no VC++ redist
-          if ($deps -match "pthread|libcurl|cudart|jansson|zlib|vcruntime") {
+          # curl, pthreads and zlib are statically linked, so a DLL for any of
+          # them would mean the static link silently fell back. VCRUNTIME140 is
+          # expected: NVIDIA's cudart_static pulls it in, and the NVIDIA driver
+          # installs it, so every CUDA capable machine already has it.
+          if ($deps -match "pthread|libcurl|jansson|zlib|cudart64") {
             Write-Error "unexpected runtime DLL dependency: $deps"; exit 1
           }
       - name: Package
