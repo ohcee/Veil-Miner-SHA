@@ -105,10 +105,13 @@ jobs:
         shell: pwsh
         run: |
           $exe = "x64\Release\ccminer.exe"
-          & dumpbin /dependents $exe
-          # a stray pthread/curl/cudart DLL dependency would mean the static
-          # link silently fell back, so fail loudly if one appears
-          $deps = (& dumpbin /dependents $exe | Select-String "\.dll") -join "`n"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $dumpbin = & $vswhere -latest -find "VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -First 1
+          $out = & $dumpbin /dependents $exe
+          $out | Write-Output
+          # a stray pthread/curl/cudart/jansson/zlib DLL means the static link
+          # silently fell back, so fail loudly if one appears
+          $deps = ($out | Select-String "\.dll") -join "`n"
           if ($deps -match "pthread|libcurl|cudart|jansson|zlib") {
             Write-Error "unexpected runtime DLL dependency: $deps"; exit 1
           }
@@ -118,18 +121,20 @@ jobs:
           $dir = "veil-miner-sha-nvidia-windows"
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           Copy-Item "x64\Release\ccminer.exe" "$dir\ccminer.exe"
-          "@echo off`r`n`"%~dp0ccminer.exe`" -a sha256dv %*" | Set-Content -NoNewline "$dir\run.bat"
-          @"
-          Veil-Miner-SHA (NVIDIA / CUDA) for Windows x64
-
-          Needs the NVIDIA driver only. The CUDA runtime, curl and pthreads are
-          linked statically, so this is a single self contained exe.
-
-          Open a terminal in this folder and run:
-            run.bat -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x
-
-          run.bat passes -a sha256dv for you. Or call ccminer.exe -a sha256dv directly.
-          "@ | Set-Content "$dir\RUN.txt"
+          $bat = "@echo off`r`n`"%~dp0ccminer.exe`" -a sha256dv %*`r`n"
+          [IO.File]::WriteAllText("$dir\run.bat", $bat)
+          $run = @(
+            "Veil-Miner-SHA (NVIDIA / CUDA) for Windows x64",
+            "",
+            "Needs the NVIDIA driver only. The CUDA runtime, curl and pthreads",
+            "are linked statically, so this is a single self contained exe.",
+            "",
+            "Open a terminal in this folder and run:",
+            "  run.bat -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x",
+            "",
+            "run.bat passes -a sha256dv for you. Or call ccminer.exe -a sha256dv directly."
+          ) -join "`r`n"
+          [IO.File]::WriteAllText("$dir\RUN.txt", $run)
           Compress-Archive -Path $dir -DestinationPath "veil-miner-sha-nvidia-windows-x64.zip" -Force
       - name: Upload NVIDIA Windows to release
         shell: bash
