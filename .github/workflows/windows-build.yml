@@ -1,0 +1,40 @@
+name: windows-build
+
+on:
+  push:
+    branches: [ feat/windows-cuda-build ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.19
+        with:
+          cuda: "12.6.2"
+          method: network
+          sub-packages: '["nvcc", "cudart", "cuda_profiler_api", "visual_studio_integration"]'
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Show CUDA
+        shell: cmd
+        run: nvcc --version
+
+      - name: Build (Release x64)
+        shell: cmd
+        run: msbuild ccminer.sln /m /p:Configuration=Release /p:Platform=x64 /v:minimal
+
+      - name: Locate binary
+        shell: pwsh
+        run: Get-ChildItem -Recurse -Filter ccminer.exe | Select-Object FullName, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ccminer-windows-x64
+          path: "**/ccminer.exe"
+          if-no-files-found: warn
