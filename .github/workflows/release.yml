@@ -40,7 +40,7 @@ jobs:
           gh release create "$TAG" \
             veil-miner-sha-amd-linux-x64.tar.gz veil-miner-sha-amd opencl/veil_sha256dv.cl \
             --title "$TAG" \
-            --notes "Prebuilt Veil SHA256D miners for Linux x64 (Ubuntu 22.04). AMD OpenCL and NVIDIA CUDA tarballs attached. AMD needs an OpenCL runtime; NVIDIA needs only the NVIDIA driver (libcudart is bundled)." \
+            --notes "Prebuilt Veil SHA256D miners. AMD OpenCL (Linux) and NVIDIA CUDA (Linux + Windows). AMD needs an OpenCL runtime; NVIDIA needs only the NVIDIA driver." \
           || gh release upload "$TAG" \
             veil-miner-sha-amd-linux-x64.tar.gz veil-miner-sha-amd opencl/veil_sha256dv.cl --clobber
 
@@ -78,33 +78,86 @@ jobs:
           chmod +x pkg/veil-miner-sha-nvidia/run.sh
           printf 'Veil-Miner-SHA (NVIDIA / CUDA)\n\nNeeds the NVIDIA driver only (libcudart is bundled). Also install a couple of libs:\n  sudo apt install -y libcurl4 libjansson4\n\nThen run:\n  ./run.sh -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x\n\n(run.sh sets LD_LIBRARY_PATH and passes -a sha256dv for you.)\n' > pkg/veil-miner-sha-nvidia/RUN.txt
           tar -C pkg -czf veil-miner-sha-nvidia-linux-x64.tar.gz veil-miner-sha-nvidia
-      - name: Upload NVIDIA to release
+      - name: Upload NVIDIA Linux to release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then TAG="nightly"; else TAG="$GITHUB_REF_NAME"; fi
           gh release upload "$TAG" veil-miner-sha-nvidia-linux-x64.tar.gz --clobber
+
+  windows-nvidia:
+    needs: amd-linux
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.19
+        with:
+          cuda: "12.6.2"
+          method: network
+          sub-packages: '["nvcc", "cudart", "cuda_profiler_api", "visual_studio_integration"]'
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+      - name: Build (Release x64)
+        shell: cmd
+        run: msbuild ccminer.sln /m /p:Configuration=Release /p:Platform=x64 /v:minimal
+      - name: Confirm the exe is self contained
+        shell: pwsh
+        run: |
+          $exe = "x64\Release\ccminer.exe"
+          & dumpbin /dependents $exe
+          # a stray pthread/curl/cudart DLL dependency would mean the static
+          # link silently fell back, so fail loudly if one appears
+          $deps = (& dumpbin /dependents $exe | Select-String "\.dll") -join "`n"
+          if ($deps -match "pthread|libcurl|cudart|jansson|zlib") {
+            Write-Error "unexpected runtime DLL dependency: $deps"; exit 1
+          }
+      - name: Package
+        shell: pwsh
+        run: |
+          $dir = "veil-miner-sha-nvidia-windows"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item "x64\Release\ccminer.exe" "$dir\ccminer.exe"
+          "@echo off`r`n`"%~dp0ccminer.exe`" -a sha256dv %*" | Set-Content -NoNewline "$dir\run.bat"
+          @"
+          Veil-Miner-SHA (NVIDIA / CUDA) for Windows x64
+
+          Needs the NVIDIA driver only. The CUDA runtime, curl and pthreads are
+          linked statically, so this is a single self contained exe.
+
+          Open a terminal in this folder and run:
+            run.bat -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x
+
+          run.bat passes -a sha256dv for you. Or call ccminer.exe -a sha256dv directly.
+          "@ | Set-Content "$dir\RUN.txt"
+          Compress-Archive -Path $dir -DestinationPath "veil-miner-sha-nvidia-windows-x64.zip" -Force
+      - name: Upload NVIDIA Windows to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then TAG="nightly"; else TAG="$GITHUB_REF_NAME"; fi
+          gh release upload "$TAG" veil-miner-sha-nvidia-windows-x64.zip --clobber
+
+  checksums:
+    needs: [nvidia-linux, windows-nvidia]
+    runs-on: ubuntu-22.04
+    steps:
       - name: Publish SHA256SUMS.txt over every published asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then TAG="nightly"; else TAG="$GITHUB_REF_NAME"; fi
-          # Download whatever the release actually holds rather than naming
-          # files here. The release also carries the bare veil-miner-sha-amd
-          # executable and veil_sha256dv.cl, and naming only the two tarballs
-          # left those two uncovered. Summing the published copies also means
-          # the file describes what users download, not a local build.
           mkdir -p dist
-          gh release download "$TAG" -D dist --clobber
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D dist --clobber
           cd dist
           rm -f SHA256SUMS SHA256SUMS.txt SHA256SUMS.txt.asc
-          # Leave the sum file itself out: the shell creates SHA256SUMS.txt for
-          # the redirect before find runs, so without this it lists its own
-          # (empty) hash and every sha256sum -c run ends with one FAILED line.
+          # Sum the published copies so the file describes what users download.
+          # Exclude the sum file itself: the redirect creates it before find
+          # runs, so without the filter it lists its own empty hash and every
+          # sha256sum -c ends with one FAILED line.
           find . -maxdepth 1 -type f ! -name 'SHA256SUMS*' -printf '%P\n' | sort | xargs sha256sum > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          gh release upload "$TAG" SHA256SUMS.txt --clobber
-          # Retire the old name so a release never carries two sum files that
-          # could disagree.
+          gh release upload "$TAG" SHA256SUMS.txt -R "$GITHUB_REPOSITORY" --clobber
           gh release delete-asset "$TAG" SHA256SUMS -y 2>/dev/null || true
