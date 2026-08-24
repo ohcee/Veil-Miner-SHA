@@ -112,8 +112,10 @@ jobs:
           # a stray pthread/curl/cudart/jansson/zlib DLL means the static link
           # silently fell back, so fail loudly if one appears
           $deps = ($out | Select-String "\.dll") -join "`n"
-          # static /MT everywhere: no third party libs and no VC++ redist
-          if ($deps -match "pthread|libcurl|cudart|jansson|zlib|vcruntime") {
+          # Third party libs (cudart, curl, pthreads, jansson, zlib) must be
+          # static. VCRUNTIME140*.dll is expected and allowed: the exe needs the
+          # VC++ 2015-2022 redistributable, documented in RUN.txt.
+          if ($deps -match "pthread|libcurl|cudart|jansson|zlib") {
             Write-Error "unexpected runtime DLL dependency: $deps"; exit 1
           }
       - name: Package
@@ -127,8 +129,10 @@ jobs:
           $run = @(
             "Veil-Miner-SHA (NVIDIA / CUDA) for Windows x64",
             "",
-            "Needs the NVIDIA driver only. The CUDA runtime, curl and pthreads",
-            "are linked statically, so this is a single self contained exe.",
+            "Needs the NVIDIA driver, plus the Microsoft VC++ 2015-2022",
+            "redistributable: https://aka.ms/vs/17/release/vc_redist.x64.exe",
+            "(most Windows machines already have it). The CUDA runtime, curl and",
+            "pthreads are linked statically, so those are the only extra needs.",
             "",
             "Open a terminal in this folder and run:",
             "  run.bat -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x",

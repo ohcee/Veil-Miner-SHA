@@ -68,6 +68,19 @@ tar xzf veil-miner-sha-nvidia-linux-x64.tar.gz && cd veil-miner-sha-nvidia
 
 `run.sh` sets `LD_LIBRARY_PATH` and passes `-a sha256dv` for you.
 
+### Prebuilt binary, Windows
+
+Needs the **NVIDIA driver** and the [Microsoft VC++ 2015-2022 redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+(most machines already have it). Grab `veil-miner-sha-nvidia-windows-x64.zip`
+from the [latest release](https://github.com/ohcee/Veil-Miner-SHA/releases/latest),
+unzip it, open a terminal in the folder, and run:
+
+```bat
+run.bat -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x
+```
+
+`run.bat` passes `-a sha256dv` for you.
+
 ## Verify a download
 
 Every release ships a `SHA256SUMS.txt` file written by the same CI job that built the
