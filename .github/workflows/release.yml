@@ -69,14 +69,30 @@ jobs:
             --with-cuda="$CUDA_PATH" --with-nvml=libnvidia-ml.so
           export LIBRARY_PATH="$CUDA_PATH/lib64/stubs:$LIBRARY_PATH"
           make -j"$(nproc)"
-      - name: Package (bundle libcudart so only the driver is needed)
+      - name: Package (bundle every non-glibc dep so only the driver is needed)
         run: |
-          mkdir -p pkg/veil-miner-sha-nvidia
-          cp ccminer pkg/veil-miner-sha-nvidia/
-          cp -L "$CUDA_PATH"/lib64/libcudart.so.12 pkg/veil-miner-sha-nvidia/
-          printf '#!/usr/bin/env bash\ncd "$(dirname "$0")"\nexport LD_LIBRARY_PATH="$PWD:$LD_LIBRARY_PATH"\nexec ./ccminer -a sha256dv "$@"\n' > pkg/veil-miner-sha-nvidia/run.sh
-          chmod +x pkg/veil-miner-sha-nvidia/run.sh
-          printf 'Veil-Miner-SHA (NVIDIA / CUDA)\n\nNeeds the NVIDIA driver only (libcudart is bundled). Also install a couple of libs:\n  sudo apt install -y libcurl4 libjansson4\n\nThen run:\n  ./run.sh -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x\n\n(run.sh sets LD_LIBRARY_PATH and passes -a sha256dv for you.)\n' > pkg/veil-miner-sha-nvidia/RUN.txt
+          dst=pkg/veil-miner-sha-nvidia
+          mkdir -p "$dst"
+          cp ccminer "$dst/"
+          cp -L "$CUDA_PATH"/lib64/libcudart.so.12 "$dst/"
+          # Bundle curl, jansson, openssl and their whole transitive tree, so a
+          # fresh ubuntu needs nothing but the nvidia driver. Skip the core
+          # glibc/loader libs and libstdc++/libgcc (must match the host), and
+          # the driver's own libcuda.
+          ldd ccminer | awk '/=> \//{print $3}' | while read -r lib; do
+            case "$(basename "$lib")" in
+              libc.so.*|libm.so.*|libpthread.so.*|libdl.so.*|librt.so.*|ld-linux*|libresolv.so.*|libnss_*|libgcc_s.so.*|libstdc++.so.*|libcuda.so.*|libcudart.so.*) ;;
+              *) cp -L "$lib" "$dst/" ;;
+            esac
+          done
+          # fail loudly if the libs the tester was missing did not get bundled
+          for want in libcurl.so.4 libjansson.so.4; do
+            ls "$dst/$want" >/dev/null || { echo "::error::$want not bundled"; exit 1; }
+          done
+          echo "bundled: $(ls "$dst" | tr '\n' ' ')"
+          printf '#!/usr/bin/env bash\ncd "$(dirname "$0")"\nexport LD_LIBRARY_PATH="$PWD:$LD_LIBRARY_PATH"\nexec ./ccminer -a sha256dv "$@"\n' > "$dst/run.sh"
+          chmod +x "$dst/run.sh"
+          printf 'Veil-Miner-SHA (NVIDIA / CUDA)\n\nSelf contained: needs only the NVIDIA driver. curl, jansson, openssl and\nthe CUDA runtime are bundled, so no apt installs are required.\n\nRun:\n  ./run.sh -o stratum+tcp://veil.yadaminers.pl:3333 -u YOUR_VEIL_ADDRESS -p x\n\n(run.sh sets LD_LIBRARY_PATH and passes -a sha256dv for you.)\n' > "$dst/RUN.txt"
           tar -C pkg -czf veil-miner-sha-nvidia-linux-x64.tar.gz veil-miner-sha-nvidia
       - name: Upload NVIDIA Linux to release
         env:
